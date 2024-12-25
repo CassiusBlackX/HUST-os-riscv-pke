@@ -5,6 +5,10 @@
 #include "process.h"
 
 #define MAX_CMDLINE_ARGS 64
+#define ELF_SYMTAB 2 // symbol table
+#define ELF_STRTAB 3 // string table
+#define STT_FILE 4   // symbol name is file name
+#define STT_FUNC 18  // symbol name is function name
 
 // elf header structure
 typedef struct elf_header_t {
@@ -37,6 +41,30 @@ typedef struct elf_prog_header_t {
   uint64 align;  /* Segment alignment */
 } elf_prog_header;
 
+/// elf section header
+typedef struct elf_section_header_t {
+  uint32 name;   /* Section name (string tbl index) */
+  uint32 type;   /* Section type */
+  uint64 flags;  /* Section flags */
+  uint64 addr;   /* Section virtual addr at execution */
+  uint64 offset; /* Section file offset */
+  uint64 size;   /* Section size in bytes */
+  uint32 link;   /* Link to another section */
+  uint32 info;   /* Additional section information */
+  uint64 addralign; /* Section alignment */
+  uint64 entsize;   /* Entry size if section holds table */
+} elf_section_header;
+
+/// elf symbol table
+typedef struct elf_symbol_t {
+  uint32 name;  /* Symbol name (string tbl index) */
+  uint8 info;   /* Symbol type and binding */
+  uint8 other;  /* Symbol visibility */
+  uint16 shndx; /* Section index */
+  uint64 value; /* Symbol value */
+  uint64 size;  /* Symbol size */
+} elf_symbol;
+
 #define ELF_MAGIC 0x464C457FU  // "\x7FELF" in little endian
 #define ELF_PROG_LOAD 1
 
@@ -59,5 +87,6 @@ elf_status elf_init(elf_ctx *ctx, void *info);
 elf_status elf_load(elf_ctx *ctx);
 
 void load_bincode_from_host_elf(process *p);
-
+elf_status elf_load_symbol(elf_ctx *ctx);
+elf_status elf_print_name(uint64 addr, int *current_depth, int max_depth);
 #endif

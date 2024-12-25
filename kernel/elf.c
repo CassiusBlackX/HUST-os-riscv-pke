@@ -8,6 +8,10 @@
 #include "riscv.h"
 #include "spike_interface/spike_utils.h"
 
+unsigned elf_symbol_num;
+elf_symbol elf_symbols[64];
+char elf_symbol_names[2048];
+
 typedef struct elf_info_t {
   spike_file_t *f;
   process *p;
@@ -133,8 +137,52 @@ void load_bincode_from_host_elf(process *p) {
   // entry (virtual, also physical in lab1_x) address
   p->trapframe->epc = elfloader.ehdr.entry;
 
+  /// add in lab1 chalenge to load symbols
+  if (elf_load_symbol(&elfloader) != EL_OK) panic("Fail on loading symbols.\n");
+
   // close the host spike file
   spike_file_close( info.f );
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+elf_status elf_load_symbol(elf_ctx *ctx) {
+  elf_section_header sh;
+  int str_size = 0;
+  for (int i = 0, offset = ctx->ehdr.shoff; i < ctx->ehdr.shnum; i++, offset += sizeof(elf_section_header)) {
+    if (elf_fpread(ctx, (void*)&sh, sizeof(sh), offset) != sizeof(sh)) return EL_EIO;
+    if (sh.type == ELF_SYMTAB) {
+      if (elf_fpread(ctx, elf_symbols, sh.size, sh.offset) != sh.size) return EL_EIO;
+      elf_symbol_num = sh.size / sizeof(elf_symbol);
+    } else if (sh.type == ELF_STRTAB) {
+      // there might be more than 1 string table
+      if (elf_fpread(ctx, elf_symbol_names + str_size, sh.size, sh.offset) != sh.size) return EL_EIO;
+      str_size += sh.size;
+    }
+  }
+  return EL_OK;
+}
+
+elf_status elf_print_name(uint64 ra, int *current_depth, int max_depth) {
+  uint64 tmp = 0;
+  int symbol_index = -1;
+  for (int i = 0; i < elf_symbol_num; i++) {
+    if (elf_symbols[i].info == STT_FUNC && elf_symbols[i].value < ra && elf_symbols[i].value > tmp) {
+      tmp = elf_symbols[i].value;
+      symbol_index = i;
+    }
+  }
+  if (symbol_index != -1) {
+    if (elf_symbols[symbol_index].value >= 0x81000000) { 
+      sprint("%s\n", elf_symbol_names + elf_symbols[symbol_index].name);
+    }
+    else {
+      return EL_EIO;
+    }
+  } else {
+    sprint("failed to backtrace symbol\n");
+    return EL_ERR;
+  }
+  (*current_depth)++;
+  return EL_OK;
 }
