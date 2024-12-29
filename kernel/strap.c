@@ -45,6 +45,10 @@ void handle_mtimer_trap() {
 
 }
 
+int check_fault_addr(uint64 fault_addr) {
+  return fault_addr >= current->trapframe->regs.sp - PGSIZE;
+}
+
 //
 // the page fault handler. added @lab2_3. parameters:
 // sepc: the pc when fault happens;
@@ -61,9 +65,13 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
       {
         uint64 pa = (uint64)alloc_page();
         if ((void*)pa == NULL) {
-          panic("unable to allocate a new physical page!\n");
+          panic("unable to allocate a new physical page!");
         }
-        map_pages(current->pagetable, ROUNDDOWN(stval, PGSIZE), PGSIZE, pa, prot_to_type(PROT_READ | PROT_WRITE, 1));
+        if (check_fault_addr(stval)) {
+          map_pages(current->pagetable, ROUNDDOWN(stval, PGSIZE), PGSIZE, pa, prot_to_type(PROT_READ | PROT_WRITE, 1));
+        } else {
+          panic("this address is not available!");
+        }
       }
       break;
     default:
