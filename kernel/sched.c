@@ -6,6 +6,8 @@
 #include "spike_interface/spike_utils.h"
 
 process* ready_queue_head = NULL;
+/// added at lab3 challenge 1
+process* blocked_queue_head = NULL;
 
 //
 // insert a process, proc, into the END of ready queue.
@@ -33,6 +35,60 @@ void insert_to_ready_queue( process* proc ) {
   proc->queue_next = NULL;
 
   return;
+}
+
+/// added at lab3 challenge 1
+/// insert a process, proc, into the END of blocked queue.
+void insert_to_blocked_queue(process* proc) {
+  if (ready_queue_head != NULL) {
+    if (ready_queue_head == proc) {
+      ready_queue_head = ready_queue_head->queue_next;
+      return;
+    } else {
+      process* p;
+      for (p = ready_queue_head; p->queue_next != NULL; p = p->queue_next) {
+        if (p->queue_next == proc) {
+          p->queue_next = p->queue_next->queue_next;
+          return;
+        }
+      }
+    }
+  }
+  if (blocked_queue_head == NULL) {
+    proc->status = BLOCKED;
+    proc->queue_next = NULL;
+    blocked_queue_head = proc;
+    return;
+  } else {
+    process* p;
+    for (p = blocked_queue_head; p->queue_next != NULL; p = p->queue_next) {
+      if (p == proc) return;
+    }
+    p->queue_next = proc;
+    proc->status = BLOCKED;
+    proc->queue_next = NULL;
+    return;
+  }
+}
+
+/// added at labe3 challenge 1
+/// wake up function, wake up the first process in blocked queue.
+void wake_up(process* proc) {
+  if (blocked_queue_head != NULL) {
+    process *p = blocked_queue_head;
+    if (p->pid == proc->parent->pid) {
+      blocked_queue_head = blocked_queue_head->queue_next;
+      insert_to_ready_queue(p);
+    } else {
+      for (; p->queue_next != NULL; p = p->queue_next) {
+        if (p->queue_next->pid == proc->parent->pid) {
+          insert_to_ready_queue(p->queue_next);
+          p->queue_next = p->queue_next->queue_next;
+          break;
+        }
+      }
+    }
+  }
 }
 
 //

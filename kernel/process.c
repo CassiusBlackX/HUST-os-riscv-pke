@@ -164,7 +164,8 @@ int free_process( process* proc ) {
   // but for proxy kernel, it (memory leaking) may NOT be a really serious issue,
   // as it is different from regular OS, which needs to run 7x24.
   proc->status = ZOMBIE;
-
+  if (proc->pid == 0) return 0;
+  wake_up(proc);
   return 0;
 }
 
@@ -261,4 +262,42 @@ int do_fork( process* parent)
   insert_to_ready_queue( child );
 
   return child->pid;
+}
+
+
+/// wait function, added at lab3 challenge1
+/// if pid == -1, wait for any child process.
+/// if pid > 0, wait for the child process with the given pid.
+/// return the pid of the child process that has exited.
+ssize_t do_wait(int pid) {
+  if (pid == -1) {
+    bool found = 0;
+    for (int i = 0; i < NPROC; i++) {
+      if (procs[i].status == FREE || procs[i].parent == NULL) continue;
+      if (procs[i].parent->pid == current->pid) {
+        found = 1;
+        if (procs[i].status == ZOMBIE) {
+          procs[i].status = FREE;
+          return procs[i].pid;
+        }
+      }
+    }
+    if (found == 0) return -1;
+    else {
+      insert_to_blocked_queue(current);
+      schedule();
+      return -2;
+    }
+  } else if (pid > 0 && pid < NPROC) {
+    if (procs[pid].parent->pid == current->pid) {
+      if (procs[pid].status == ZOMBIE) {
+        return pid;  // if is already zombie, return immediately
+      } else {
+        insert_to_blocked_queue(current);
+        schedule();
+        return -2;
+      }
+    }
+  }
+  return -1;
 }

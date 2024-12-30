@@ -102,6 +102,9 @@ process* alloc_process();
 int free_process( process* proc );
 // fork a child from parent
 int do_fork(process* parent);
+/// added at lab3 challenge 1
+/// do_wait function, wait for a child process to exit.
+ssize_t do_wait(int pid);
 
 // current running process
 extern process* current;
