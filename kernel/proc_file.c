@@ -6,6 +6,7 @@
 
 #include "hostfs.h"
 #include "pmm.h"
+#include "vmm.h"
 #include "process.h"
 #include "ramdev.h"
 #include "rfs.h"
@@ -80,8 +81,32 @@ struct file *get_opened_file(int fd) {
 // return: -1 on failure; non-zero file-descriptor on success.
 //
 int do_open(char *pathname, int flags) {
+  /// add in lab4 challenge 1
+  /// enable the func to parse relative path
+  char parsed_path[MAX_PATH_LEN];
+  
+  if (pathname[0] == '.' && pathname[1] == '.') {
+    // parent dir
+    pathname += 2;
+    if (current->pfiles->cwd->parent != NULL) {
+      strcpy(parsed_path, current->pfiles->cwd->parent->name);
+      if (!strcmp(parsed_path, "/")) *parsed_path = '\0';
+      strcat(parsed_path, pathname);
+    } else {
+      strcpy(parsed_path, "/");
+    }
+  } else if (pathname[0] == '.' && pathname[1] != '.') {
+    // not parent dir, but cur dir
+    pathname += 1;
+    strcpy(parsed_path, current->pfiles->cwd->name);
+    if (!strcmp(parsed_path, "/")) *parsed_path = '\0';
+    strcat(parsed_path, pathname);
+  } else {
+    strcpy(parsed_path, pathname);
+  }
+  
   struct file *opened_file = NULL;
-  if ((opened_file = vfs_open(pathname, flags)) == NULL) return -1;
+  if ((opened_file = vfs_open(parsed_path, flags)) == NULL) return -1;
 
   int fd = 0;
   if (current->pfiles->nfiles >= MAX_FILES) {
@@ -220,4 +245,41 @@ int do_link(char *oldpath, char *newpath) {
 //
 int do_unlink(char *path) {
   return vfs_unlink(path);
+}
+
+/// add in lab4 challenge 1
+/// get the current working directory
+int do_getcwd(char* path) {
+  if (current->pfiles->cwd == NULL) return -1;
+  strcpy((char*)user_va_to_pa((pagetable_t)current->pagetable, path), current->pfiles->cwd->name);
+  return 0;
+}
+
+/// add in lab4 challenge 1
+/// change current working directory
+int do_chdir(char* path) {
+  if (current->pfiles->cwd == NULL) return -1;
+  char* pathpa = (char*)user_va_to_pa((pagetable_t)current->pagetable, path);
+  if (pathpa[0] == '.' && pathpa[1] == '.') {
+    // go to parent directory
+    if (current->pfiles->cwd->parent != NULL) {
+      strcpy(current->pfiles->cwd->name, current->pfiles->cwd->parent->name);
+      struct dentry* tmp = current->pfiles->cwd->parent;
+      current->pfiles->cwd->parent->parent = current->pfiles->cwd;
+      free_page(tmp);
+      pathpa += 2;  // we can directly move the pointer
+      if (pathpa[0] == '/') pathpa++;
+      strcat(current->pfiles->cwd->name, pathpa);
+    } else {
+      strcpy(current->pfiles->cwd->name, "/");
+    }
+  } else if (pathpa[0] == '.' && pathpa[1] != '.') {
+    // not parent dir, but cur dir
+    pathpa++;
+    if (!strcmp(current->pfiles->cwd->name, "/")) *current->pfiles->cwd->name = 0;
+    strcat(current->pfiles->cwd->name, pathpa);
+  } else {
+    strcpy(current->pfiles->cwd->name, pathpa);
+  }
+  return 0;
 }
